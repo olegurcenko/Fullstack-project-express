@@ -1,13 +1,9 @@
 import express from 'express'
-import jwt from 'jsonwebtoken'
 import mongoose from 'mongoose'
-import bcrypt from 'bcrypt'
-import { validationResult } from 'express-validator'
-import UserModel from './models/user.js'
+import multer from 'multer'
 import { registerValidator, loginValidator, postCreateValidator } from './validations/validations.js'
-import checkAuth from './utils/checkAuth.js'
-import * as UserController from './controllers/UserController.js'
-import * as PostController from './controllers/PostController.js'
+import { UserController, PostController } from './controllers/index.js'
+import { handleErrors, checkAuth } from './utils/index.js'
 
 
 mongoose.connect(
@@ -22,28 +18,47 @@ mongoose.connect(
 
 const app = express()
 
+const storage = multer.diskStorage({
+    destination: (_, __, cb) => {
+        cb(null, 'uploads');
+    },
+    filename: (_, file, cb) => {
+        cb(null, file.originalname);
+    },
+})
+
+const upload = multer({ storage })
+
 app.use(express.json())
+
+app.use('/uploads', express.static('uploads'))
 
 //! User
 
-app.post('/auth/login', loginValidator, UserController.login)
+app.post('/auth/login', loginValidator, handleErrors, UserController.login)
 
-app.post('/auth/register', registerValidator, UserController.register)
+app.post('/auth/register', registerValidator, handleErrors, UserController.register)
 
 app.get('/auth/me', checkAuth, UserController.getMe)
-
 //! Post
 
 app.get('/posts', PostController.getAll)
 
 app.get('/posts/:id', PostController.getOne)
 
-//app.delete('/posts', PostController.delete)
+app.delete('/posts/:id', checkAuth, PostController.remove)
 
-//app.patch('/posts', PostController.update)
+app.post('/posts', checkAuth, postCreateValidator, handleErrors, PostController.create)
 
-app.post('/posts', checkAuth, postCreateValidator, PostController.create)
+app.patch('/posts/:id', checkAuth, postCreateValidator, handleErrors, PostController.update)
 
+//! upload
+
+app.post('/upload', checkAuth, upload.single('image'), (req, res) => {
+    res.json({
+        url: `/uploads/${req.file.originalname}`,
+    })
+})
 
 app.listen(4444, (err) => {
     if (err) {
